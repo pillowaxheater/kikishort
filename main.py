@@ -25,7 +25,7 @@ last_requests = {}
 # Initialize the Telegram client (without starting it yet)
 bot = TelegramClient('bot_session', API_ID, API_HASH)
 
-async def get_chat_history(chat_id, limit=100, since_hours=24):
+async def get_chat_history(chat_id, limit=100, since_hours=240):
     """Get chat history from Telegram"""
     messages = []
     last_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=since_hours)
@@ -89,8 +89,8 @@ async def handle_summary_command(event):
         summary = response["choices"][0]["message"]["content"].strip()
         
     except Exception as e:
-        logger.error(f"Error: {e}")
-        summary = "сори чет не получилось"
+    logger.error(f"Error detail: {str(e)}")
+    summary = "сори чет не получилось"
     
     await event.respond(f"📌 короче ({summary_type}):\n{summary}")
 
