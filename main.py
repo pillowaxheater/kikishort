@@ -11,8 +11,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Load environment variables
-BOT_TOKEN = "8002261223:AAFD_8ZZ1oIHcvayPN5x_gXMrVgTq-AN6TI"
-OPENAI_API_KEY = "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"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_bot_token")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "your_openai_key")
+openai.api_key = OPENAI_API_KEY  # Set key in old-style way
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
