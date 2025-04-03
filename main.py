@@ -4,6 +4,7 @@ import datetime
 from telethon import TelegramClient, events
 import asyncio
 import openai  # Use old-style import
+import re  # Added for regex pattern matching
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -21,7 +22,7 @@ openai.api_key = OPENAI_API_KEY  # Set key in old-style way
 # Track last request time per chat
 last_requests = {}
 
-# Initialize the Telegram client
+# Initialize the Telegram client (without starting it yet)
 bot = TelegramClient('bot_session', API_ID, API_HASH)
 
 async def get_chat_history(chat_id, limit=100, since_hours=24):
@@ -58,7 +59,7 @@ async def handle_summary_command(event):
     
     try:
         if alltime_mode:
-            # Get all accessible history for all-time mode
+            # Get all accessible history for all-time mode (limited to 100 messages)
             messages = await get_chat_history(chat_id, limit=100, since_hours=24*30)
             summary_type = "всех сообщений"
         else:
@@ -68,7 +69,6 @@ async def handle_summary_command(event):
             messages = await get_chat_history(chat_id, limit=100, since_hours=hours_since)
             last_requests[chat_id] = now
             summary_type = "последних сообщений"
-
         
         if not messages:
             await event.respond("короче некуда — новых сообщений нет")
@@ -101,7 +101,9 @@ async def start_command(event):
 
 async def main():
     """Start the bot and run it until disconnected"""
+    # Start the bot here instead of at module level
     await bot.start(bot_token=BOT_TOKEN)
+    print("Bot started successfully!")
     await bot.run_until_disconnected()
 
 if __name__ == "__main__":
