@@ -3,20 +3,20 @@ import os
 import datetime
 from telethon import TelegramClient, events
 import asyncio
-from openai import OpenAI
+import openai  # Use old-style import
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Telegram API credentials (create at https://my.telegram.org)
+# Telegram API credentials
 API_ID = int(os.environ.get("API_ID", "12345"))
 API_HASH = os.environ.get("API_HASH", "your_api_hash")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_bot_token")
 
 # OpenAI API key
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "your_openai_key")
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai.api_key = OPENAI_API_KEY  # Set key in old-style way
 
 # Track last request time per chat
 last_requests = {}
@@ -75,8 +75,8 @@ async def handle_summary_command(event):
         # Prepare text for summarization
         text_to_summarize = "\n".join([f"{m['user']}: {m['text']}" for m in messages])
         
-        # Generate summary with OpenAI
-        response = client.chat.completions.create(
+        # Generate summary with OpenAI (old-style API)
+        response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "используй lowercase. суммируй этот разговор максимально кратко и по пунктам, указывая автора по каждому пункту:"},
@@ -84,7 +84,7 @@ async def handle_summary_command(event):
             ],
             max_tokens=5000
         )
-        summary = response.choices[0].message.content.strip()
+        summary = response["choices"][0]["message"]["content"].strip()
         
     except Exception as e:
         logger.error(f"Error: {e}")
