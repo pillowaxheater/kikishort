@@ -22,7 +22,7 @@ openai.api_key = OPENAI_API_KEY  # Set key in old-style way
 last_requests = {}
 
 # Initialize the Telegram client
-bot = TelegramClient('bot_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+bot = TelegramClient('bot_session', API_ID, API_HASH)
 
 async def get_chat_history(chat_id, limit=100, since_hours=24):
     """Get chat history from Telegram"""
@@ -99,6 +99,7 @@ async def start_command(event):
 
 async def main():
     """Start the bot and run it until disconnected"""
+    await bot.start(bot_token=BOT_TOKEN)
     await bot.run_until_disconnected()
 
 if __name__ == "__main__":
