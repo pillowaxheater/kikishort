@@ -77,14 +77,14 @@ async def handle_summary_command(event):
         
         # Generate summary with OpenAI
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "в ответе используй только маленькие (lowercase) буквы. суммируй этот разговор кратко и по пунктам, указывая автора по каждому пункту:"},
+                {"role": "system", "content": "используй lowercase. суммируй этот разговор максимально кратко и по пунктам, указывая автора по каждому пункту:"},
                 {"role": "user", "content": text_to_summarize}
             ],
-            max_tokens=150
+            max_tokens=5000
         )
-        summary = response.choices[0].message.content.strip()
+    summary = response["choices"][0]["message"]["content"].strip()
         
     except Exception as e:
         logger.error(f"Error: {e}")
