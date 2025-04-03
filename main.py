@@ -50,6 +50,7 @@ async def handle_summary_command(event):
     """Handle the 'короче' command"""
     chat_id = event.chat_id
     now = datetime.datetime.now(datetime.timezone.utc)
+    summary_type = "сообщений"  # Default value to prevent UnboundLocalError
     
     # Check if the command is for all-time summary
     command_text = event.text.lower()
@@ -57,7 +58,7 @@ async def handle_summary_command(event):
     
     try:
         if alltime_mode:
-            # Get all accessible history for all-time mode (limited to 100 messages)
+            # Get all accessible history for all-time mode
             messages = await get_chat_history(chat_id, limit=100, since_hours=24*30)
             summary_type = "всех сообщений"
         else:
@@ -67,6 +68,7 @@ async def handle_summary_command(event):
             messages = await get_chat_history(chat_id, limit=100, since_hours=hours_since)
             last_requests[chat_id] = now
             summary_type = "последних сообщений"
+
         
         if not messages:
             await event.respond("короче некуда — новых сообщений нет")
