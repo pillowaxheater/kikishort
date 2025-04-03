@@ -15,7 +15,7 @@ API_HASH = os.environ.get("API_HASH", "your_api_hash")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_bot_token")
 
 # OpenAI API key
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "your_openai_api_key")
+openai.api_key = OPENAI_API_KEY
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Track last request time per chat
