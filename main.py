@@ -1,110 +1,117 @@
 import logging
 import os
 import datetime
-from telethon import TelegramClient, events
-import asyncio
-import openai  # Use old-style import
-import re  # Added for regex pattern matching
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import openai
+from openai import OpenAI
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Telegram API credentials
-API_ID = int(os.environ.get("API_ID", "12345"))
-API_HASH = os.environ.get("API_HASH", "your_api_hash")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_bot_token")
+# Load environment variables
+BOT_TOKEN = "8002261223:AAFD_8ZZ1oIHcvayPN5x_gXMrVgTq-AN6TI"
+OPENAI_API_KEY = "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"
 
-# OpenAI API key
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "your_openai_key")
-openai.api_key = OPENAI_API_KEY  # Set key in old-style way
+# Initialize OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Track last request time per chat
+# Global variables to store all messages
+all_messages = []
+
+# Store messages per chat
+messages = {}
 last_requests = {}
 
-# Initialize the Telegram client (without starting it yet)
-bot = TelegramClient('bot_session', API_ID, API_HASH)
+async def save_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save incoming messages."""
+    if not update.message or not update.message.text:  # Ignore updates that don't have text messages
+        return
 
-async def get_chat_history(chat_id, limit=100, since_hours=240):
-    """Get chat history from Telegram"""
-    messages = []
-    last_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=since_hours)
-    
-    async for message in bot.iter_messages(chat_id, limit=limit):
-        if message.text and not message.text.lower().startswith("короче") and message.date > last_date:
-            if message.sender:
-                sender = await message.get_sender()
-                sender_name = sender.first_name if hasattr(sender, 'first_name') else "Unknown"
-            else:
-                sender_name = "Unknown"
-                
-            messages.append({
-                "user": sender_name,
-                "text": message.text,
-                "time": message.date
-            })
-    
-    return messages
+    chat_id = update.effective_chat.id
+    user = update.message.from_user.first_name
+    text = update.message.text
+    timestamp = datetime.datetime.now()
 
-@bot.on(events.NewMessage(pattern=r"(?i)короче(\s+оллтайм|\s+alltime)?"))
-async def handle_summary_command(event):
-    """Handle the 'короче' command"""
-    chat_id = event.chat_id
-    now = datetime.datetime.now(datetime.timezone.utc)
-    summary_type = "сообщений"  # Default value to prevent UnboundLocalError
+    # Initialize chat history if it doesn't exist
+    if chat_id not in messages:
+        messages[chat_id] = []
+
+    # Don't save the "короче" command itself
+    if text.lower() != "короче":
+        messages[chat_id].append({"user": user, "text": text, "time": timestamp})
+        print(f"Saved message from {user} in chat {chat_id}: {text}")
+
+async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Summarize messages from the last 24 hours or since last request."""
+    chat_id = update.effective_chat.id
+    now = datetime.datetime.now()
     
+    if chat_id not in messages or len(messages[chat_id]) == 0:
+        await update.message.reply_text("короче некуда — новых сообщений нет.")
+        return
+
     # Check if the command is for all-time summary
-    command_text = event.text.lower()
+    command_text = update.message.text.lower()
     alltime_mode = "оллтайм" in command_text or "alltime" in command_text
-    
+
+    if alltime_mode:
+        # Get all messages for all-time summary
+        recent_msgs = messages[chat_id]
+        summary_type = "всех сообщений"
+    else:
+        # Get last request time or default to 24 hours ago
+        last_request = last_requests.get(chat_id, now - datetime.timedelta(days=1))
+        recent_msgs = [m for m in messages[chat_id] if m["time"] > last_request]
+        summary_type = "последних сообщений"
+
+    if not recent_msgs:
+        await update.message.reply_text("короче некуда — новых сообщений нет")
+        return
+
+    # Only update last request time for regular summaries, not all-time
+    if not alltime_mode:
+        last_requests[chat_id] = now
+
+    # Prepare text for summarization
+    text_to_summarize = "\n".join([f"{m['user']}: {m['text']}" for m in recent_msgs])
+
     try:
-        if alltime_mode:
-            # Get all accessible history for all-time mode (limited to 100 messages)
-            messages = await get_chat_history(chat_id, limit=100, since_hours=24*30)
-            summary_type = "всех сообщений"
-        else:
-            # Get messages since last request or last 24 hours
-            last_request = last_requests.get(chat_id, now - datetime.timedelta(hours=24))
-            hours_since = (now - last_request).total_seconds() / 3600
-            messages = await get_chat_history(chat_id, limit=100, since_hours=hours_since)
-            last_requests[chat_id] = now
-            summary_type = "последних сообщений"
-        
-        if not messages:
-            await event.respond("короче некуда — новых сообщений нет")
-            return
-            
-        # Prepare text for summarization
-        text_to_summarize = "\n".join([f"{m['user']}: {m['text']}" for m in messages])
-        
-        # Generate summary with OpenAI (old-style API)
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "используй lowercase. суммируй этот разговор максимально кратко и по пунктам, указывая автора по каждому пункту:"},
                 {"role": "user", "content": text_to_summarize}
             ],
-            max_tokens=5000
+            max_tokens=3000
         )
-        summary = response["choices"][0]["message"]["content"].strip()
-        
+        summary = response.choices[0].message.content.strip()
     except Exception as e:
-    logger.error(f"Error detail: {str(e)}")
-    summary = "сори чет не получилось"
+        logger.error(f"Ошибка OpenAI: {e}")
+        summary = "сори чет не получилось"
+
+    await update.message.reply_text(f"🐳 саммари {summary_type}:\n{summary}")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a start message."""
+    await update.message.reply_text("привет, я бот для резюмирования чата. напиши 'короче' и я суммирую последние сообщения.")
     
-    await event.respond(f"📌 короче ({summary_type}):\n{summary}")
+def main() -> None:
+    """Start the bot."""
+    # Create the Application
+    app = Application.builder().token(BOT_TOKEN).build()
 
-@bot.on(events.NewMessage(pattern=r"/start"))
-async def start_command(event):
-    """Handle the /start command"""
-    await event.respond("привет, я бот для резюмирования чата. напиши 'короче' и я суммирую последние сообщения.")
+    # Add handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(r"(?i)короче"), save_message))
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)короче"), summarize))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(r"(?i)короче(\s+оллтайм|\s+alltime)?"), save_message))
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)короче(\s+оллтайм|\s+alltime)?"), summarize))
 
-async def main():
-    """Start the bot and run it until disconnected"""
-    # Start the bot here instead of at module level
-    await bot.start(bot_token=BOT_TOKEN)
-    print("Bot started successfully!")
-    await bot.run_until_disconnected()
+    # Start the Bot
+    logger.info("бот запущен...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
